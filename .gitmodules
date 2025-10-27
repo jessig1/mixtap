@@ -1,9 +1,0 @@
-[submodule "scripts/Vinylhound-Backend"]
-	path = scripts/Vinylhound-Backend
-	url = https://github.com/jessig1/vinylhound-backend.git
-[submodule "scripts/vinylhound-frontend"]
-	path = scripts/vinylhound-frontend
-	url = https://github.com/jessig1/vinylhound-frontend.git
-[submodule "scripts/Vinylhound-Infrastructure"]
-	path = scripts/Vinylhound-Infrastructure
-	url = https://github.com/jessig1/vinylhound-infrastructure.git
