@@ -54,7 +54,17 @@
       "Bash(PORT=8004 DB_HOST=localhost DB_PORT=54320 DB_USER=vinylhound DB_PASSWORD=localpassword DB_NAME=vinylhound DB_SSLMODE=disable go run:*)",
       "Bash(GOPROXY=direct go get:*)",
       "Bash(docker run:*)",
-      "Bash(docker rm:*)"
+      "Bash(docker rm:*)",
+      "Bash(go mod verify:*)",
+      "Bash(docker builder prune:*)",
+      "Bash(export DB_HOST=\"localhost\" DB_PORT=\"54320\" DB_USER=\"vinylhound\" DB_PASSWORD=\"localpassword\" DB_NAME=\"vinylhound\":*)",
+      "Bash(docker exec:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker-compose build:*)",
+      "Bash(TOKEN=\"7eWTBLfsaBZ7FFMce9yMWOjikhKA0YlY4bsq9Go7-mM\")",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(TOKEN=\"xOgArTsbXD7xVF-UUXXgLFowl_pNGiit_p8M1PRcQDQ\")"
     ],
     "deny": [],
     "ask": []

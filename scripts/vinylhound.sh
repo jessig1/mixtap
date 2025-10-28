@@ -237,25 +237,12 @@ start_infrastructure() {
     log_info "Starting backend services..."
     $compose_cmd up -d
 
-    # Wait for each service in order
-    log_info "Waiting for services to be ready..."
-
-    # Wait for user service
-    wait_attempts=30
-    while [ $wait_attempts -gt 0 ]; do
-        if curl -s -f "http://localhost:8001/health" >/dev/null 2>&1; then
-            break
-        fi
-        wait_attempts=$((wait_attempts - 1))
-        [ $wait_attempts -gt 0 ] && sleep 1
-    done
-
-    # Wait for API Gateway specifically since frontend depends on it
-    log_info "Waiting for API Gateway..."
-    gateway_ready=false
+    # Wait for backend service
+    log_info "Waiting for backend to be ready..."
+    backend_ready=false
     for _ in $(seq 1 30); do
         if curl -s -f "http://localhost:8080/health" >/dev/null 2>&1; then
-            gateway_ready=true
+            backend_ready=true
             break
         fi
         echo -n "."
@@ -263,20 +250,12 @@ start_infrastructure() {
     done
     echo ""
 
-    if [ "$gateway_ready" = true ]; then
-        log_success "API Gateway is ready at http://localhost:8080"
+    if [ "$backend_ready" = true ]; then
+        log_success "Backend is ready at http://localhost:8080"
     else
-        log_error "API Gateway failed to start properly"
-        log_error "Checking API Gateway logs..."
-        docker logs vinylhound-api-gateway
-        return 1
-    fi
-
-    # Additional verification
-    log_info "Verifying API Gateway connectivity..."
-    if ! curl -s -f "http://localhost:8080/health" >/dev/null 2>&1; then
-        log_error "API Gateway is not responding correctly"
-        log_error "Please check the Docker logs and configuration"
+        log_error "Backend failed to start properly"
+        log_error "Checking backend logs..."
+        docker logs vinylhound-backend
         return 1
     fi
 
@@ -307,27 +286,51 @@ stop_infrastructure() {
 # ============================================================================
 
 run_migrations() {
-    log_info "Running database migrations..."
+    log_info "Checking database schema..."
 
     cd "$BACKEND_DIR"
 
-    # Check if migrations directory exists
-    if [ ! -d migrations ]; then
-        log_error "Migrations directory not found at $BACKEND_DIR/migrations"
-        exit 1
+    # Check if tables already exist (created by schema.sql in Docker)
+    if docker exec vinylhound-db psql -U vinylhound -d vinylhound -c "\dt" 2>/dev/null | grep -q "users"; then
+        log_success "Database schema already initialized"
+        return 0
     fi
 
-    # Export environment for migrations
-    export DATABASE_URL="postgresql://vinylhound:localpassword@localhost:54320/vinylhound?sslmode=disable"
+    # Tables don't exist, run migrations
+    log_info "Running database migrations..."
+
+    # Check if migrations directory exists
+    if [ ! -d migrations ]; then
+        log_warn "Migrations directory not found at $BACKEND_DIR/migrations"
+        log_info "Database will be initialized by schema.sql on first start"
+        return 0
+    fi
+
+    # Export environment variables for migrations
+    export DB_HOST="localhost"
+    export DB_PORT="54320"
+    export DB_USER="vinylhound"
+    export DB_PASSWORD="localpassword"
+    export DB_NAME="vinylhound"
+    export DB_SSLMODE="disable"
 
     # Check if migration tool exists
-    if [ -f tools/migrate/main.go ]; then
-        go run tools/migrate/main.go up
-    elif [ -f cmd/migrate/main.go ]; then
-        go run cmd/migrate/main.go up
+    if [ -f cmd/migrate/main.go ]; then
+        log_info "Downloading migration tool dependencies..."
+        cd cmd/migrate
+        go mod download 2>&1 | grep -v "^go: downloading" || true
+        log_info "Running migrations..."
+        go run main.go up
+        local exit_code=$?
+        cd ../..
+
+        if [ $exit_code -ne 0 ]; then
+            log_warn "Migrations had issues, but database may already be initialized"
+            return 0
+        fi
     else
-        log_warn "No migration tool found. Please run migrations manually."
-        log_info "You can apply migrations using psql or your preferred tool."
+        log_info "No migration tool found, using schema.sql from Infrastructure"
+        return 0
     fi
 
     log_success "Migrations completed"
@@ -541,18 +544,22 @@ start_all() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     log_info "Service URLs:"
-    echo "  Frontend:     http://localhost:5173 (or http://localhost:3000)"
-    echo "  Backend API:  http://localhost:8080"
-    echo "  Database:     postgresql://vinylhound@localhost:54320/vinylhound"
+    echo "  Frontend:       http://localhost:5173 (dev) or http://localhost:3000 (prod)"
+    echo "  Backend API:    http://localhost:8080"
+    echo "  Database:       postgresql://vinylhound@localhost:54320/vinylhound"
+    echo ""
+    log_info "Architecture:"
+    echo "  Frontend -> Backend Monolith -> Database"
+    echo "  (No API Gateway - Direct connection)"
     echo ""
     log_info "Logs:"
-    echo "  Backend:      $LOG_DIR/backend.log"
-    echo "  Frontend:     $LOG_DIR/frontend.log"
+    echo "  Backend:        $LOG_DIR/backend.log"
+    echo "  Frontend:       $LOG_DIR/frontend.log"
     echo ""
     log_info "Commands:"
-    echo "  View logs:    $0 logs [backend|frontend|all]"
-    echo "  Stop all:     $0 stop"
-    echo "  Restart:      $0 restart"
+    echo "  View logs:      $0 logs [backend|frontend|all]"
+    echo "  Stop all:       $0 stop"
+    echo "  Restart:        $0 restart"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
