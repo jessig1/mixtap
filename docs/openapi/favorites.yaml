@@ -1,0 +1,144 @@
+openapi: 3.1.0
+info:
+  title: Vinylhound Favorites API
+  version: 1.0.0
+  description: >
+    Endpoints for managing the authenticated user's favorited tracks. These routes replace
+    the legacy playlist-based favorites endpoints.
+servers:
+  - url: https://api.vinylhound.local
+    description: Local development
+paths:
+  /api/v1/me/favorites/tracks:
+    get:
+      summary: List favorited tracks
+      operationId: listFavoriteTracks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Favorited tracks for the current user.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tracks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FavoriteTrack'
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/me/favorites/tracks/{trackId}:
+    parameters:
+      - name: trackId
+        in: path
+        description: Numeric identifier of the track.
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    put:
+      summary: Favorite a track
+      operationId: favoriteTrack
+      description: |
+        Adds the track to the user's favorites. The operation is idempotent: the first call
+        returns `201 Created`, and subsequent calls return `204 No Content`.
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Track added to favorites.
+          headers:
+            Location:
+              description: Canonical URL of the favorite resource.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  track:
+                    $ref: '#/components/schemas/FavoriteTrack'
+        "204":
+          description: Track already existed in favorites.
+        "400":
+          $ref: '#/components/responses/BadRequestError'
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Remove a track from favorites
+      operationId: unfavoriteTrack
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Track removed (or no longer present).
+        "400":
+          $ref: '#/components/responses/BadRequestError'
+        "401":
+          $ref: '#/components/responses/UnauthorizedError'
+        "404":
+          $ref: '#/components/responses/NotFoundError'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    FavoriteTrack:
+      type: object
+      required:
+        - track_id
+        - favorited_at
+      properties:
+        track_id:
+          type: integer
+          description: Track identifier.
+          example: 123
+        favorited_at:
+          type: string
+          format: date-time
+          description: Timestamp when the track was favorited.
+          example: "2024-04-01T10:30:00Z"
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message.
+  responses:
+    BadRequestError:
+      description: The request was invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnauthorizedError:
+      description: Authentication credentials were missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFoundError:
+      description: Requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalServerError:
+      description: An unexpected error occurred.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
